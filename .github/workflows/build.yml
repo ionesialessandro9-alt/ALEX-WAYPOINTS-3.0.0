@@ -23,14 +23,17 @@ jobs:
         with:
           gradle-version: '8.14'
 
-      - name: Build mod
-        working-directory: ALEX_Waypoints_3_0_Dawn_1.21.8/fabric-mod
-        run: gradle build
+      - name: Find and build mod
+        shell: bash
+        run: |
+          DIR=$(find . -name settings.gradle -not -path '*/.gradle/*' | head -n 1)
+          cd "$(dirname "$DIR")"
+          gradle build
 
       - uses: actions/upload-artifact@v4
         with:
           name: ALEX-Waypoints-Fabric-Mod
-          path: ALEX_Waypoints_3_0_Dawn_1.21.8/fabric-mod/build/libs/*.jar
+          path: '**/build/libs/*.jar'
 
   build-overlay:
     name: Build Desktop Companion
@@ -42,18 +45,19 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        working-directory: ALEX_Waypoints_3_0_Dawn_1.21.8/overlay
+      - name: Find overlay and install dependencies
+        shell: pwsh
         run: |
+          $file = Get-ChildItem -Path . -Filter requirements.txt -Recurse | Where-Object { $_.FullName -match 'overlay' } | Select-Object -First 1
+          if (-not $file) { throw "Cartella overlay non trovata" }
+          Set-Location $file.DirectoryName
           pip install -r requirements.txt
           pip install pyinstaller
+          pyinstaller --onefile --windowed alex_overlay.py
+          "OVERLAY_DIR=$($file.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Build EXE
-        working-directory: ALEX_Waypoints_3_0_Dawn_1.21.8/overlay
-        run: pyinstaller --onefile --windowed alex_overlay.py
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
         with:
           name: ALEX-Waypoints-Desktop
-          path: ALEX_Waypoints_3_0_Dawn_1.21.8/overlay/dist/alex_overlay.exe
-
+          path: '**/dist/alex_overlay.exe'
