@@ -17,23 +17,31 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14'
 
-      - name: Find and build mod
+      - name: Locate project
         shell: bash
         run: |
+          echo "Cartelle trovate:"
+          find . -name settings.gradle -print
           DIR=$(find . -name settings.gradle -not -path '*/.gradle/*' | head -n 1)
+          if [ -z "$DIR" ]; then
+            echo "ERRORE: settings.gradle non trovato"
+            exit 1
+          fi
           cd "$(dirname "$DIR")"
           gradle build
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload mod
+        uses: actions/upload-artifact@v4
         with:
           name: ALEX-Waypoints-Fabric-Mod
           path: '**/build/libs/*.jar'
+          if-no-files-found: error
 
   build-overlay:
     name: Build Desktop Companion
@@ -45,19 +53,32 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Find overlay and install dependencies
+      - name: Locate and build overlay
         shell: pwsh
         run: |
-          $file = Get-ChildItem -Path . -Filter requirements.txt -Recurse | Where-Object { $_.FullName -match 'overlay' } | Select-Object -First 1
-          if (-not $file) { throw "Cartella overlay non trovata" }
+          $file = Get-ChildItem -Path . -Filter requirements.txt -Recurse |
+            Where-Object { $_.FullName -match 'overlay' } |
+            Select-Object -First 1
+
+          if (-not $file) {
+            throw "requirements.txt non trovato nella cartella overlay"
+          }
+
           Set-Location $file.DirectoryName
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
           pyinstaller --onefile --windowed alex_overlay.py
-          "OVERLAY_DIR=$($file.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          if (-not (Test-Path "dist/alex_overlay.exe")) {
+            throw "EXE non generato"
+          }
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
+          name: ALEX-Waypoints-Desktop
+          path: '**/dist/alex_overlay.exe'
+          if-no-files-found: error
+
           name: ALEX-Waypoints-Desktop
           path: '**/dist/alex_overlay.exe'
